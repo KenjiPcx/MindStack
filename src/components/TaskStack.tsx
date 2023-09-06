@@ -8,23 +8,7 @@ import {
 } from "microsoft-cognitiveservices-speech-sdk";
 import { IconMicrophone } from "@tabler/icons-react";
 import TaskItem from "./TaskItem";
-
-const mockTasks = [
-  {
-    task: "C test C test C tesst C test C test C tesst C test C test C tesst",
-    priority: 33,
-  },
-  { task: "A test", priority: 1 },
-  { task: "B test", priority: 4 },
-  { task: "D", priority: 4 },
-];
-
-const mockBacklog = [
-  { task: "AA", priority: 1 },
-  { task: "BV", priority: 2 },
-  { task: "DS", priority: 4 },
-  { task: "CD", priority: 3 },
-];
+import { getOpenaiResponse, populatePrompt } from "../openaiClient";
 
 const speechConfig = SpeechConfig.fromSubscription(
   import.meta.env.VITE_AZURE_SPEECH_RECOGNITION_KEY,
@@ -98,16 +82,19 @@ const TaskStack = () => {
   useEffect(() => {
     if (transcript === "") return;
 
-    pushTaskToStack("finish app", 4);
-    const fadeIn = setTimeout(() => {
-      setTranscriptVisible(true);
-    }, 100);
+    console.log("Calling with transcript", transcript);
+    const prompt = populatePrompt(transcript);
+    getOpenaiResponse(prompt).then((res) => {
+      console.log(res);
+    });
+
+    setTranscriptVisible(true);
     const fadeOut = setTimeout(() => {
       setTranscriptVisible(false);
+      setTranscript("");
     }, 3000);
 
     return () => {
-      clearTimeout(fadeIn);
       clearTimeout(fadeOut);
     };
   }, [transcript]);
