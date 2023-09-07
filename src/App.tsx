@@ -1,4 +1,5 @@
 import { AppShell, MantineProvider } from "@mantine/core";
+import { Notifications } from "@mantine/notifications";
 import { useState } from "react";
 import TaskStack from "./components/TaskStack";
 import AppNavbar from "./components/AppNavbar";
@@ -13,6 +14,7 @@ const App = () => {
       withGlobalStyles
       withNormalizeCSS
     >
+      <Notifications position="top-center" />
       <AppShell
         navbarOffsetBreakpoint="sm"
         asideOffsetBreakpoint="sm"

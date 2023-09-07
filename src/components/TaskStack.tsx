@@ -1,4 +1,5 @@
-import { Alert, Box, Button, Image, Stack, Text } from "@mantine/core";
+import { Alert, Box, Button, Center, Image, Stack, Text } from "@mantine/core";
+import { notifications } from "@mantine/notifications";
 import { useEffect, useState } from "react";
 import { AppTask } from "../types";
 import {
@@ -6,9 +7,13 @@ import {
   SpeechRecognizer,
   AudioConfig,
 } from "microsoft-cognitiveservices-speech-sdk";
-import { IconMicrophone } from "@tabler/icons-react";
+import { IconCheck, IconMicrophone } from "@tabler/icons-react";
 import TaskItem from "./TaskItem";
-import { getOpenaiResponse, populatePrompt } from "../openaiClient";
+import {
+  AssistantResponse,
+  getOpenaiResponse,
+  populatePrompt,
+} from "../openaiClient";
 
 const speechConfig = SpeechConfig.fromSubscription(
   import.meta.env.VITE_AZURE_SPEECH_RECOGNITION_KEY,
@@ -39,11 +44,9 @@ const TaskStack = () => {
   };
 
   const pushTaskToStack = (task: string, priority: number = 0) => {
-    setTasks((oldTasks) => {
-      oldTasks.unshift({ task, priority });
-      oldTasks.sort((a, b) => b.priority - a.priority);
-      return oldTasks;
-    });
+    setTasks(
+      [{ task, priority }, ...tasks].sort((a, b) => b.priority - a.priority)
+    );
   };
 
   const popTaskFromStack = () => {
@@ -51,12 +54,10 @@ const TaskStack = () => {
     setTasks((oldTasks) => oldTasks.slice(1));
   };
 
-  const backlogTask = (task: string, priority: number = 0) => {
-    setBacklog((oldBacklog) => {
-      oldBacklog.unshift({ task, priority });
-      oldBacklog.sort((a, b) => b.priority - a.priority);
-      return oldBacklog;
-    });
+  const pushTaskToBacklog = (task: string, priority: number = 0) => {
+    setBacklog(
+      [{ task, priority }, ...backlog].sort((a, b) => b.priority - a.priority)
+    );
   };
 
   const popTaskFromBacklog = () => {
@@ -72,6 +73,79 @@ const TaskStack = () => {
     setBacklog([]);
   };
 
+  const showNotification = () => {
+    notifications.show({
+      id: "get-openai-res",
+      loading: true,
+      title: "Handling instruction",
+      message: "Give me a second to think! What to do..? 🤔",
+      autoClose: false,
+      withCloseButton: false,
+      styles: () => ({
+        root: { marginTop: 60 },
+      }),
+    });
+  };
+
+  const showFailureNotification = (assistantResponse: string) => {
+    notifications.update({
+      id: "get-openai-res",
+      color: "red",
+      title: "I don't understand",
+      message: assistantResponse,
+      icon: <IconCheck size="1rem" />,
+      autoClose: 5000,
+      styles: () => ({
+        root: { marginTop: 60 },
+      }),
+    });
+  };
+
+  const handleAssistantCalls = (res: AssistantResponse) => {
+    console.log(res);
+    if (!res.functionToCall) return;
+
+    switch (res.functionToCall) {
+      case "pushTaskToStack":
+        console.log("Here");
+        if (res.functionParams) {
+          pushTaskToStack(res.functionParams.task, res.functionParams.priority);
+        }
+        break;
+      case "popTaskFromStack":
+        popTaskFromStack();
+        break;
+      case "clearStack":
+        clearStack();
+        break;
+      case "pushTaskToBacklog":
+        if (res.functionParams) {
+          pushTaskToBacklog(
+            res.functionParams.task,
+            res.functionParams.priority
+          );
+        }
+        break;
+      case "popTaskFromBacklog":
+        popTaskFromBacklog();
+        break;
+      case "clearBacklog":
+        clearBacklog();
+    }
+
+    notifications.update({
+      id: "get-openai-res",
+      color: "teal",
+      title: "All done",
+      message: res.assistantResponse,
+      icon: <IconCheck size="1rem" />,
+      autoClose: 5000,
+      styles: () => ({
+        root: { marginTop: 60 },
+      }),
+    });
+  };
+
   useEffect(() => {
     setTasks((oldTasks) => {
       oldTasks.sort((a, b) => b.priority - a.priority);
@@ -82,10 +156,14 @@ const TaskStack = () => {
   useEffect(() => {
     if (transcript === "") return;
 
-    console.log("Calling with transcript", transcript);
+    showNotification();
     const prompt = populatePrompt(transcript);
-    getOpenaiResponse(prompt).then((res) => {
-      console.log(res);
+    getOpenaiResponse(prompt).then((res: AssistantResponse) => {
+      if (!res.functionToCall) {
+        showFailureNotification(res.assistantResponse);
+      } else {
+        handleAssistantCalls(res);
+      }
     });
 
     setTranscriptVisible(true);
@@ -140,6 +218,7 @@ const TaskStack = () => {
       )}
       <Stack sx={{ position: "absolute", bottom: "10%" }}>
         <Text
+          px={20}
           color="dimmed"
           sx={{
             textAlign: "center",
@@ -149,16 +228,19 @@ const TaskStack = () => {
         >
           {transcript}
         </Text>
-        <Button
-          leftIcon={<IconMicrophone />}
-          size="lg"
-          onClick={recognizeSpeech}
-          disabled={recording}
-          variant="light"
-          color="cyan"
-        >
-          Record Command
-        </Button>
+        <Center>
+          <Button
+            leftIcon={<IconMicrophone />}
+            size="lg"
+            maw="fit-content"
+            onClick={recognizeSpeech}
+            disabled={recording}
+            variant="light"
+            color="cyan"
+          >
+            Record Command
+          </Button>
+        </Center>
       </Stack>
     </Stack>
   );

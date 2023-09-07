@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { AppTask } from "./types";
 
 export const openai = new OpenAI({
   apiKey: import.meta.env.VITE_OPEN_AI_KEY,
@@ -16,12 +17,14 @@ export const populatePrompt = (transcript: string) => {
     -- useful for removing a task (the topmost one) when it is done or completed
     - clearStack()
     -- useful for clearing the stack
+    -- need to mention the word "stack" and not anything else
     - pushTaskToBacklog(task: string, priority: number)
     -- exactly the same with "pushTaskToStack" but for a backlog
     - popTaskFromBacklog()
     -- exactly the same with "popTaskFromStack" but for a backlog
     - clearBacklog()
     -- exactly the same with "clearStack" but for a backlog
+    -- need to mention the word "backlog" and not anything else
 
     [Output]
     Return me a stringified json object where we have 
@@ -31,16 +34,22 @@ export const populatePrompt = (transcript: string) => {
 
     Response structure with typescript notation:
     {
-            "functionToCall": "pushTaskToStack" | "popTaskFromStack" | "clearStack";
+            "functionToCall": "pushTaskToStack" | "popTaskFromStack" | "clearStack" | "pushTaskToBacklog" | "popTaskFromBacklog" | "clearBacklog";
             "functionParams"?: { "task": string; "priority": number };
             "assistantResponse": string;
     } 
 
     [Extra Rules]
     - Only one function can be called in each response
-    - If no function is detected, then just set "functionToCall" to be null
+    - For extracted task, it should be summarized and actionable
+    - If no function is detected or the intent isn't clear, then just set "functionToCall" to be null, I want at least 95% intent match accuracy, don't assume if its not clear
     - If the priority mentioned in the transcript exceeds the limits, bound it within 0 to 10
     - Assistant response could be supportive, funny, reference memes or culture, judgemental, motivational or just "done", I want my productivity app to have a personality like Andrew Tate and Elon Musk
+    - You may assume priority from certain words
+      - "do it now" means a 10
+      - "urgent / high priority" would be a 7-9
+      - "will do it right after" would be a 4-6
+      - "can do it at the end of the day" would be a 1-3
 
     ------------------------------------------------------------------------------------------------------------
 
@@ -70,4 +79,20 @@ export const getOpenaiResponse = async (prompt: string) => {
     await openai.chat.completions.create(params);
 
   return JSON.parse(completion.choices[0].message.content!);
+};
+
+export type AssistantResponse = {
+  functionToCall:
+    | "pushTaskToStack"
+    | "popTaskFromStack"
+    | "clearStack"
+    | "pushTaskToBacklog"
+    | "popTaskFromBacklog"
+    | "clearBacklog"
+    | null;
+  functionParams?: {
+    task: AppTask["task"];
+    priority: AppTask["priority"];
+  };
+  assistantResponse: string;
 };
