@@ -24,8 +24,12 @@ speechConfig.speechRecognitionLanguage = "en-US";
 const taskDisplayLimit = 3;
 
 const TaskStack = () => {
-  const [tasks, setTasks] = useState<AppTask[]>([]);
-  const [backlog, setBacklog] = useState<AppTask[]>([]);
+  const [tasks, setTasks] = useState<AppTask[]>(
+    JSON.parse(localStorage.getItem("tasks")!) || []
+  );
+  const [backlog, setBacklog] = useState<AppTask[]>(
+    JSON.parse(localStorage.getItem("backlog")!) || []
+  );
   const [transcript, setTranscript] = useState<string>("");
   const [transcriptVisible, setTranscriptVisible] = useState<boolean>(false);
   const [recording, setRecording] = useState<boolean>(false);
@@ -231,6 +235,17 @@ const TaskStack = () => {
       clearTimeout(fadeOut);
     };
   }, [transcript]);
+
+  // Local Database
+  useEffect(() => {
+    console.log(tasks);
+    localStorage.setItem("tasks", JSON.stringify(tasks));
+  }, [tasks]);
+
+  useEffect(() => {
+    console.log(backlog);
+    localStorage.setItem("backlog", JSON.stringify(backlog));
+  }, [backlog]);
 
   return (
     <Stack h={"100%"} align="center" justify="center">

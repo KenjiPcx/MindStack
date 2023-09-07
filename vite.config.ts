@@ -4,7 +4,11 @@ import { VitePWA, VitePWAOptions } from "vite-plugin-pwa";
 
 const manifestForPlugIn: Partial<VitePWAOptions> = {
   registerType: "prompt",
-  includeAssets: ["favicon.ico", "apple-touch-icon-180x180.png", "maskable-icon-512x512.png"],
+  includeAssets: [
+    "favicon.ico",
+    "apple-touch-icon-180x180.png",
+    "maskable-icon-512x512.png",
+  ],
   manifest: {
     name: "MindStack",
     short_name: "MindStack",
