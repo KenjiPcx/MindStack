@@ -7,7 +7,7 @@ import {
   SpeechRecognizer,
   AudioConfig,
 } from "microsoft-cognitiveservices-speech-sdk";
-import { IconCheck, IconMicrophone } from "@tabler/icons-react";
+import { IconCheck, IconMicrophone, IconX } from "@tabler/icons-react";
 import TaskItem from "./TaskItem";
 import {
   AssistantResponse,
@@ -21,6 +21,8 @@ const speechConfig = SpeechConfig.fromSubscription(
 );
 speechConfig.speechRecognitionLanguage = "en-US";
 
+const taskDisplayLimit = 3;
+
 const TaskStack = () => {
   const [tasks, setTasks] = useState<AppTask[]>([]);
   const [backlog, setBacklog] = useState<AppTask[]>([]);
@@ -30,12 +32,21 @@ const TaskStack = () => {
 
   const recognizeSpeech = () => {
     setRecording(true);
+    showNotification({
+      id: "transcript",
+      title: "Transcriber activated",
+      message: "Voice is being transcribed",
+    });
     const audioConfig = AudioConfig.fromDefaultMicrophoneInput();
     const speechRecognizer = new SpeechRecognizer(speechConfig, audioConfig);
     speechRecognizer.recognizeOnceAsync(
       (res) => {
         setTranscript(res.text);
         setRecording(false);
+        showSuccessNotification({
+          id: "transcript",
+          message: "Transcription complete",
+        });
       },
       (err) => {
         console.error(err);
@@ -43,26 +54,40 @@ const TaskStack = () => {
     );
   };
 
+  // Core stack data structure
   const pushTaskToStack = (task: string, priority: number = 0) => {
-    setTasks(
-      [{ task, priority }, ...tasks].sort((a, b) => b.priority - a.priority)
+    if (tasks.length >= taskDisplayLimit) {
+      const poppedTask = tasks.pop();
+      pushTaskToBacklog(poppedTask!.task, poppedTask!.priority);
+    }
+    setTasks((oldTasks) =>
+      [{ task, priority }, ...oldTasks].sort((a, b) => b.priority - a.priority)
     );
   };
 
   const popTaskFromStack = () => {
     if (tasks.length == 0) return;
     setTasks((oldTasks) => oldTasks.slice(1));
+
+    if (backlog.length > 0) {
+      const poppedBacklogTask = popTaskFromBacklog();
+      pushTaskToStack(poppedBacklogTask!.task, 0);
+    }
   };
 
   const pushTaskToBacklog = (task: string, priority: number = 0) => {
-    setBacklog(
-      [{ task, priority }, ...backlog].sort((a, b) => b.priority - a.priority)
+    setBacklog((oldBacklog) =>
+      [{ task, priority }, ...oldBacklog].sort(
+        (a, b) => b.priority - a.priority
+      )
     );
   };
 
   const popTaskFromBacklog = () => {
     if (backlog.length == 0) return;
-    setTasks((oldBacklog) => oldBacklog.slice(1));
+    const poppedTask = backlog[0];
+    setBacklog((oldBacklog) => oldBacklog.slice(1));
+    return poppedTask;
   };
 
   const clearStack = () => {
@@ -72,13 +97,23 @@ const TaskStack = () => {
   const clearBacklog = () => {
     setBacklog([]);
   };
+  // End of data structure
 
-  const showNotification = () => {
+  // Notifications
+  const showNotification = ({
+    id,
+    title,
+    message,
+  }: {
+    id: string;
+    title: string;
+    message: string;
+  }) => {
     notifications.show({
-      id: "get-openai-res",
+      id: id,
       loading: true,
-      title: "Handling instruction",
-      message: "Give me a second to think! What to do..? 🤔",
+      title: title,
+      message: message,
       autoClose: false,
       withCloseButton: false,
       styles: () => ({
@@ -87,13 +122,19 @@ const TaskStack = () => {
     });
   };
 
-  const showFailureNotification = (assistantResponse: string) => {
+  const showFailureNotification = ({
+    id,
+    message,
+  }: {
+    id: string;
+    message: string;
+  }) => {
     notifications.update({
-      id: "get-openai-res",
+      id: id,
       color: "red",
       title: "I don't understand",
-      message: assistantResponse,
-      icon: <IconCheck size="1rem" />,
+      message: message,
+      icon: <IconX size="1rem" />,
       autoClose: 5000,
       styles: () => ({
         root: { marginTop: 60 },
@@ -101,8 +142,28 @@ const TaskStack = () => {
     });
   };
 
+  const showSuccessNotification = ({
+    id,
+    message,
+  }: {
+    id: string;
+    message: string;
+  }) => {
+    notifications.update({
+      id: id,
+      color: "green",
+      title: "Done",
+      message: message,
+      icon: <IconCheck size="1rem" />,
+      autoClose: 5000,
+      styles: () => ({
+        root: { marginTop: 60 },
+      }),
+    });
+  };
+  // End of notifications
+
   const handleAssistantCalls = (res: AssistantResponse) => {
-    console.log(res);
     if (!res.functionToCall) return;
 
     switch (res.functionToCall) {
@@ -133,34 +194,28 @@ const TaskStack = () => {
         clearBacklog();
     }
 
-    notifications.update({
+    showSuccessNotification({
       id: "get-openai-res",
-      color: "teal",
-      title: "All done",
       message: res.assistantResponse,
-      icon: <IconCheck size="1rem" />,
-      autoClose: 5000,
-      styles: () => ({
-        root: { marginTop: 60 },
-      }),
     });
   };
 
-  useEffect(() => {
-    setTasks((oldTasks) => {
-      oldTasks.sort((a, b) => b.priority - a.priority);
-      return oldTasks;
-    });
-  }, []);
-
+  // Main logic
   useEffect(() => {
     if (transcript === "") return;
 
-    showNotification();
+    showNotification({
+      id: "get-openai-res",
+      title: "Handling instruction",
+      message: "Give me a second to think! What to do..? 🤔",
+    });
     const prompt = populatePrompt(transcript);
     getOpenaiResponse(prompt).then((res: AssistantResponse) => {
       if (!res.functionToCall) {
-        showFailureNotification(res.assistantResponse);
+        showFailureNotification({
+          id: "get-openai-res",
+          message: res.assistantResponse,
+        });
       } else {
         handleAssistantCalls(res);
       }
@@ -177,10 +232,6 @@ const TaskStack = () => {
     };
   }, [transcript]);
 
-  useEffect(() => {
-    console.log(tasks);
-  }, [tasks]);
-
   return (
     <Stack h={"100%"} align="center" justify="center">
       {(tasks.length > 0 || backlog.length > 0) && (
@@ -192,15 +243,7 @@ const TaskStack = () => {
       )}
 
       {tasks.length > 0 ? (
-        tasks
-          .slice(0, 6)
-          .map((task, i) => <TaskItem task={task} key={i} type={"Stack"} />)
-      ) : backlog.length > 0 ? (
-        backlog
-          .slice(0, 6)
-          .map((backlog, i) => (
-            <TaskItem task={backlog} key={i} type={"Backlog"} />
-          ))
+        tasks.map((task, i) => <TaskItem task={task} key={i} />)
       ) : (
         <Box>
           <Image
